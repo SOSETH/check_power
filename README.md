@@ -1,0 +1,3 @@
+== check_power
+
+Checks the power strips installed at LEE via SNMP. The check is not finished yet...
