@@ -2,6 +2,14 @@ from pysnmp.hlapi import *
 import argparse
 import os.path
 import pickle
+from enum import Enum
+
+
+class ReturnCode(Enum):
+    OK = 0
+    WARNING = 1
+    CRITICAL = 2
+    UNKNOWN = 3
 
 
 class Powerstrip:
@@ -63,14 +71,19 @@ class IcingaOutput:
 
     def print_perf_data(self):
         for x in range(0, 3):
+            first = True
             for y in self.VAR_NAMES.keys():
                 value = self.data[x][y]
                 if isinstance(value, float):
                     value = "{0:.2f}".format(value)
                 if isinstance(value, int):
                     value = str(value)
-                print ('\''+ self.VAR_NAMES[y]+ '\'='+ value,end="",flush=True)
-            print ('')
+                if first:
+                    print ('\'P'+str(x)+ self.VAR_NAMES[y]+ '\'='+ value,end="",flush=True)
+                    first = False
+                else:
+                    print (', \'P'+str(x)+ self.VAR_NAMES[y]+ '\'='+ value,end="",flush=True)
+
 
 class Main:
     VAR_NAMES = ['power', 'var', 'comp', 'U', 'I', 'f', 'total', 'PF']
@@ -78,9 +91,16 @@ class Main:
     def __init__(self):
         parser = argparse.ArgumentParser(description='Iciinga check for three-phase E3METER IPS power strips')
         parser.add_argument('IP')
-        parser.add_argument('--statefile', '-s', dest='statefile')
+        parser.add_argument('-s', '--statefile', dest='statefile')
+        parser.add_argument('-w', dest='warn_thresh')
+        parser.add_argument('-c', dest='crit_thresh')
+        parser.add_argument('-i', type=int, dest='interval')
         parser.add_argument('--debug', action="store_true")
         parser.set_defaults(statefile='/tmp/pwrstrstate')
+        parser.set_defaults(interval=10)
+        parser.set_defaults(warn_thresh=1)
+        parser.set_defaults(crit_thresh=1)
+        self.avg = None
         self.args = parser.parse_args()
 
     def __load_statefile__(self):
@@ -124,7 +144,7 @@ class Main:
             self.avg = None
 
     def add_measurement(self, channels):
-        if len(self.history)>10:
+        if len(self.history)>self.args.interval:
             self.history.pop(0)
         self.history.append(channels)
 
@@ -133,9 +153,25 @@ class Main:
         var.fetch()
         res = var.get_result()
         self.__load_statefile__()
+        self.add_measurement(res)
+        rc = ReturnCode.OK
+        if self.avg:
+            for i in range(0, 3):
+                if res[i]['I'] <= self.avg[i]['I'] * (1 - self.args.crit_thresh) or res[i]['I'] >= self.avg[i]['I'] * (1 + self.args.crit_thresh):
+                    rc = ReturnCode.CRITICAL
+                    print("CRITICAL - Channel {0} current is {1} but average is {2} | ".format(i, res[i]['I'], self.avg[i]['I']),
+                          end="", flush=True)
+                    break
+                elif res[i]['I'] <= self.avg[i]['I']*(1-self.args.warn_thresh) or res[i]['I'] >= self.avg[i]['I']*(1+self.args.warn_thresh):
+                    rc = ReturnCode.WARNING
+                    print ("WARNING - Channel {0} current is {1} but average is {2} | ".format(i, res[i]['I'], self.avg[i]['I']),end="",flush=True)
+                    break
+
+        if rc is ReturnCode.OK:
+            print("OK | ",end="", flush=True)
+
         output = IcingaOutput(res)
         output.print_perf_data()
-        self.add_measurement(res)
         self.__store_statefile__()
 
 
