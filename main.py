@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 from pysnmp.hlapi import *
 import argparse
@@ -42,13 +44,15 @@ class Powerstrip:
 
     def fetch(self):
         # Fetch temperature
-        temp_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', 'e3IpmSensorTemperatureCelsius', 0))
+        temp_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', 'e3IpmSensorTemperatureCelsius', 0)
+                                .addMibSource("/etc/icinga2/mibs"))
         temp_result = getCmd(self.engine, self.community, self.target, self.context, temp_query)
         self.temp = float(self.get_val(temp_result)) / 10
         # Fetch all attributes from list
         for (index, attribute, divisor) in self.SNMP_DATA:
             for x in range(0, 3):
-                val_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x))
+                val_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x)
+                                       .addMibSource("/etc/icinga2/mibs"))
                 val_result = getCmd(self.engine, self.community, self.target, self.context, val_query)
                 self.channels[x][index] = self.get_val(val_result) / divisor
         # Calculate power factor
@@ -83,10 +87,10 @@ class IcingaOutput:
                 if isinstance(value, int):
                     value = str(value)
                 if first:
-                    print('\'P{0}{1}\'={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
+                    print('P{0}{1}={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
                     first = False
                 else:
-                    print(', \'P{0}{1}\'={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
+                    print(' P{0}{1}={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
 
 
 class Main:
@@ -183,14 +187,15 @@ class Main:
             self.__store_statefile__()
             print('')
         except ConnectionError:
-            rc = rc.UNKNOWN
+            rc = ReturnCode.UNKNOWN
             print('UNKNOWN - Couldn\'t connect to {0}!'.format(self.args.IP))
         except:
             if self.args.debug:
                 raise
-            rc = rc.UNKNOWN
+            rc = ReturnCode.UNKNOWN
         sys.exit(rc.value)
 
 
+os.chdir("/tmp")
 obj = Main()
 obj.do_check()
