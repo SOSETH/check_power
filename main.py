@@ -57,22 +57,22 @@ class Powerstrip:
                 self.channels[x][index] = self.get_val(val_result) / divisor
         # Calculate power factor
         for x in range(0, 3):
-            self.channels[x]['PF'] = self.channels[x]['power'] / self.channels[x]['comp']
+            self.channels[x]['PF'] = self.channels[x]['power'] / self.channels[x]['comp'] * 100
 
     def get_result(self):
         return self.channels
 
 
 class IcingaOutput:
-    # Mapping of variable names to performance data fields
-    VAR_NAMES = {'power': 'Active',
-                 'var': 'Reactive',
-                 'comp': 'Complex',
-                 'U': 'Voltage',
-                 'I': 'Current',
-                 'f': 'Frequency',
-                 'total': 'Sum',
-                 'PF': 'Power_factor'}
+    # Mapping of variable names to (performance data field, unit of measurement)
+    VAR_NAMES = {'power': ['active power', ''],
+                 'var': ['reactive power', ''],
+                 'comp': ['complex power', ''],
+                 'U': ['voltage', ''],
+                 'I': ['current', ''],
+                 'f': ['frequency', ''],
+                 'total': ['total power consumption', ''],
+                 'PF': ['power factor', '%']}
 
     def __init__(self, data):
         self.data = data
@@ -87,10 +87,13 @@ class IcingaOutput:
                 if isinstance(value, int):
                     value = str(value)
                 if first:
-                    print('P{0}{1}={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
+                    print('\'channel {0} {1}\'={2}{3}'.format(x, self.VAR_NAMES[y][0], value, self.VAR_NAMES[y][1]), end="",
+                          flush=True)
                     first = False
                 else:
-                    print(' P{0}{1}={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
+                    print(' \'channel {0} {1}\'={2}{3}'.format(x, self.VAR_NAMES[y][0], value, self.VAR_NAMES[y][1]), end="",
+                          flush=True)
+            print (' ', end="", flush=True)
 
 
 class Main:
