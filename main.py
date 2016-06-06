@@ -1,3 +1,4 @@
+import sys
 from pysnmp.hlapi import *
 import argparse
 import os.path
@@ -13,7 +14,14 @@ class ReturnCode(Enum):
 
 
 class Powerstrip:
-    SNMP_DATA = [('power', 'e3IpmPowerP', 1), ('var', 'e3IpmPowerQ', 1), ('comp', 'e3IpmPowerS', 1), ('U', 'e3IpmUrms', 1000), ('I', 'e3IpmIrms', 1000), ('f', 'e3IpmFrequency', 1000), ('total', 'e3IpmEnergyP', 1)]
+    # Format: Tuple (variable name, SNMP Attribute name, unit scale)
+    SNMP_DATA = [('power', 'e3IpmPowerP', 1),
+                 ('var', 'e3IpmPowerQ', 1),
+                 ('comp', 'e3IpmPowerS', 1),
+                 ('U', 'e3IpmUrms', 1000),
+                 ('I', 'e3IpmIrms', 1000),
+                 ('f', 'e3IpmFrequency', 1000),
+                 ('total', 'e3IpmEnergyP', 1)]
 
     def __init__(self, ip):
         self.engine = SnmpEngine()
@@ -23,39 +31,27 @@ class Powerstrip:
         self.temp = 0
         self.channels = {0: {}, 1: {}, 2: {}}
 
-    def print_result(self, res):
-        errorIndication, errorStatus, errorIndex, varBinds = next(res)
-        if errorIndication:
-            print(errorIndication)
-        elif errorStatus:
-            print('%s at %s' % (errorStatus.prettyPrint(),
-                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
-        else:
-            for varBind in varBinds:
-                print(' = '.join([x.prettyPrint() for x in varBind]))
-
-    def get_and_print(self, otype):
-        res = getCmd(self.engine, self.community, self.target, self.context, otype)
-        self.print_result(res)
-
     def get_val(self, res):
-        errorIndication, errorStatus, errorIndex, varBinds = next(res)
-        if errorIndication:
-            raise ConnectionError(errorIndication)
-        elif errorStatus:
-            raise ConnectionError('%s at %s' % (errorStatus.prettyPrint(),
-                                  errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
-        return varBinds[0][1].getValue()._value
+        error_indication, error_status, error_index, vars = next(res)
+        if error_indication:
+            raise ConnectionError(error_indication)
+        elif error_status:
+            raise ConnectionError('%s at %s' % (error_status.prettyPrint(),
+                                                error_index and vars[int(error_index) - 1][0] or '?'))
+        return vars[0][1].getValue()._value
 
     def fetch(self):
-        tempQuery = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', 'e3IpmSensorTemperatureCelsius', 0))
-        tempRes = getCmd(self.engine, self.community, self.target, self.context, tempQuery)
-        self.temp = float(self.get_val(tempRes)) / 10
+        # Fetch temperature
+        temp_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', 'e3IpmSensorTemperatureCelsius', 0))
+        temp_result = getCmd(self.engine, self.community, self.target, self.context, temp_query)
+        self.temp = float(self.get_val(temp_result)) / 10
+        # Fetch all attributes from list
         for (index, attribute, divisor) in self.SNMP_DATA:
             for x in range(0, 3):
-                vQuery=ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x))
-                vRes = getCmd(self.engine, self.community, self.target, self.context, vQuery)
-                self.channels[x][index] = self.get_val(vRes) / divisor
+                val_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x))
+                val_result = getCmd(self.engine, self.community, self.target, self.context, val_query)
+                self.channels[x][index] = self.get_val(val_result) / divisor
+        # Calculate power factor
         for x in range(0, 3):
             self.channels[x]['PF'] = self.channels[x]['power'] / self.channels[x]['comp']
 
@@ -64,7 +60,15 @@ class Powerstrip:
 
 
 class IcingaOutput:
-    VAR_NAMES = {'power': 'Active', 'var': 'Reactive', 'comp': 'Complex', 'U': 'Voltage', 'I': 'Current', 'f': 'Frequency', 'total': 'Sum', 'PF': 'Power_factor'}
+    # Mapping of variable names to performance data fields
+    VAR_NAMES = {'power': 'Active',
+                 'var': 'Reactive',
+                 'comp': 'Complex',
+                 'U': 'Voltage',
+                 'I': 'Current',
+                 'f': 'Frequency',
+                 'total': 'Sum',
+                 'PF': 'Power_factor'}
 
     def __init__(self, data):
         self.data = data
@@ -79,10 +83,10 @@ class IcingaOutput:
                 if isinstance(value, int):
                     value = str(value)
                 if first:
-                    print ('\'P'+str(x)+ self.VAR_NAMES[y]+ '\'='+ value,end="",flush=True)
+                    print('\'P{0}{1}\'={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
                     first = False
                 else:
-                    print (', \'P'+str(x)+ self.VAR_NAMES[y]+ '\'='+ value,end="",flush=True)
+                    print(', \'P{0}{1}\'={2}'.format(x, self.VAR_NAMES[y], value), end="", flush=True)
 
 
 class Main:
@@ -98,8 +102,8 @@ class Main:
         parser.add_argument('--debug', action="store_true")
         parser.set_defaults(statefile='/tmp/pwrstrstate')
         parser.set_defaults(interval=10)
-        parser.set_defaults(warn_thresh=1)
-        parser.set_defaults(crit_thresh=1)
+        parser.set_defaults(warn_thresh=5)
+        parser.set_defaults(crit_thresh=25)
         self.avg = None
         self.args = parser.parse_args()
 
@@ -110,10 +114,10 @@ class Main:
                     self.history = pickle.load(pkl_file)
             except IOError as err:
                 if self.args.debug:
-                    print ("IOError during statefile loading! History will not be available... {0}".format(err))
+                    print("IOError during statefile loading! History will not be available... {0}".format(err))
             self.__calculate_averages__()
         else:
-            self.history=[]
+            self.history = []
 
     def __store_statefile__(self):
         try:
@@ -123,16 +127,16 @@ class Main:
                 pickle.dump(self.history, pkl_file, -1)
         except IOError as err:
             if self.args.debug:
-                print ("IOError during statefile save! History will not be saved correctly, booo... {0}".format(err))
+                print("IOError during statefile save! History will not be saved correctly, booo... {0}".format(err))
 
     def __calculate_averages__(self):
         accumulator = {}
-        for i in range(0,3):
+        for i in range(0, 3):
             accumulator[i] = {}
             for j in self.VAR_NAMES:
                 accumulator[i][j] = 0
         if len(self.history) > 0:
-            for i in range(0,3):
+            for i in range(0, 3):
                 for j in range(0, len(self.history)):
                     for k in self.VAR_NAMES:
                         accumulator[i][k] += self.history[j][i][k]
@@ -144,35 +148,48 @@ class Main:
             self.avg = None
 
     def add_measurement(self, channels):
-        if len(self.history)>self.args.interval:
+        if len(self.history) > self.args.interval:
             self.history.pop(0)
         self.history.append(channels)
 
     def do_check(self):
-        var = Powerstrip(self.args.IP)
-        var.fetch()
-        res = var.get_result()
-        self.__load_statefile__()
-        self.add_measurement(res)
         rc = ReturnCode.OK
-        if self.avg:
-            for i in range(0, 3):
-                if res[i]['I'] <= self.avg[i]['I'] * (1 - self.args.crit_thresh) or res[i]['I'] >= self.avg[i]['I'] * (1 + self.args.crit_thresh):
-                    rc = ReturnCode.CRITICAL
-                    print("CRITICAL - Channel {0} current is {1} but average is {2} | ".format(i, res[i]['I'], self.avg[i]['I']),
-                          end="", flush=True)
-                    break
-                elif res[i]['I'] <= self.avg[i]['I']*(1-self.args.warn_thresh) or res[i]['I'] >= self.avg[i]['I']*(1+self.args.warn_thresh):
-                    rc = ReturnCode.WARNING
-                    print ("WARNING - Channel {0} current is {1} but average is {2} | ".format(i, res[i]['I'], self.avg[i]['I']),end="",flush=True)
-                    break
+        try:
+            var = Powerstrip(self.args.IP)
+            var.fetch()
+            res = var.get_result()
+            self.__load_statefile__()
+            if self.avg:
+                for i in range(0, 3):
+                    if res[i]['I'] <= self.avg[i]['I'] * (1 - self.args.crit_thresh) or \
+                                    res[i]['I'] >= self.avg[i]['I'] * (1 + self.args.crit_thresh):
+                        rc = ReturnCode.CRITICAL
+                        print("CRITICAL - Channel {0} current is {1} but average is {2} | ".format(
+                                i, res[i]['I'], self.avg[i]['I']), end="", flush=True)
+                        break
+                    elif res[i]['I'] <= self.avg[i]['I'] * (1 - self.args.warn_thresh) or \
+                                    res[i]['I'] >= self.avg[i]['I'] * (1 + self.args.warn_thresh):
+                        rc = ReturnCode.WARNING
+                        print("WARNING - Channel {0} current is {1} but average is {2} | ".format(
+                                i, res[i]['I'], self.avg[i]['I']), end="", flush=True)
+                        break
 
-        if rc is ReturnCode.OK:
-            print("OK | ",end="", flush=True)
+            if rc is ReturnCode.OK:
+                self.add_measurement(res)
+                print("OK | ", end="", flush=True)
 
-        output = IcingaOutput(res)
-        output.print_perf_data()
-        self.__store_statefile__()
+            output = IcingaOutput(res)
+            output.print_perf_data()
+            self.__store_statefile__()
+            print('')
+        except ConnectionError:
+            rc = rc.UNKNOWN
+            print('UNKNOWN - Couldn\'t connect to {0}!'.format(self.args.IP))
+        except:
+            if self.args.debug:
+                raise
+            rc = rc.UNKNOWN
+        sys.exit(rc.value)
 
 
 obj = Main()
