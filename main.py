@@ -57,7 +57,11 @@ class Powerstrip:
                 self.channels[x][index] = self.get_val(val_result) / divisor
         # Calculate power factor
         for x in range(0, 3):
-            self.channels[x]['PF'] = self.channels[x]['power'] / self.channels[x]['comp'] * 100
+            if self.channels[x]['comp'] <= 0.1 or \
+               self.channels[x]['power'] <= 0.1:
+                self.channels[x]['PF'] = 100
+            else:
+                self.channels[x]['PF'] = self.channels[x]['power'] / self.channels[x]['comp'] * 100
 
     def get_result(self):
         return self.channels
@@ -168,6 +172,8 @@ class Main:
             self.__load_statefile__()
             if self.avg:
                 for i in range(0, 3):
+                    if self.avg[i]['I'] <= 0.1:
+                        continue
                     if res[i]['I'] <= self.avg[i]['I'] * (1 - self.args.crit_thresh) or \
                                     res[i]['I'] >= self.avg[i]['I'] * (1 + self.args.crit_thresh):
                         rc = ReturnCode.CRITICAL
