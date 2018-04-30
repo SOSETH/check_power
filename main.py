@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 
+# Copyright (C) 2017  Maximilian Falkenstein <mfalkenstein@sos.ethz.ch>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import sys
 from pysnmp.hlapi import *
 import argparse
@@ -104,7 +119,7 @@ class Main:
     VAR_NAMES = ['power', 'var', 'comp', 'U', 'I', 'f', 'total', 'PF']
 
     def __init__(self):
-        parser = argparse.ArgumentParser(description='Iciinga check for three-phase E3METER IPS power strips')
+        parser = argparse.ArgumentParser(description='Icinga check for three-phase E3METER IPS power strips')
         parser.add_argument('IP')
         parser.add_argument('-s', '--statefile', dest='statefile')
         parser.add_argument('-w', dest='warn_thresh')
