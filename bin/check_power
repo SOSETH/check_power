@@ -15,12 +15,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
 from pysnmp.hlapi import *
 import argparse
 import os.path
 import pickle
+import sys
 from enum import Enum
+
+import check_power
+
 
 
 class ReturnCode(Enum):
@@ -60,14 +63,13 @@ class Powerstrip:
     def fetch(self):
         # Fetch temperature
         temp_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', 'e3IpmSensorTemperatureCelsius', 0)
-                                .addMibSource("/etc/icinga2/mibs"))
+                                .addMibSource(os.path.dirname(os.path.abspath(check_power.__file__))))
         temp_result = getCmd(self.engine, self.community, self.target, self.context, temp_query)
         self.temp = float(self.get_val(temp_result)) / 10
         # Fetch all attributes from list
         for (index, attribute, divisor) in self.SNMP_DATA:
             for x in range(0, 3):
-                val_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x)
-                                       .addMibSource("/etc/icinga2/mibs"))
+                val_query = ObjectType(ObjectIdentity('NETTRACK-E3METER-SNMP-MIB', attribute, x))
                 val_result = getCmd(self.engine, self.community, self.target, self.context, val_query)
                 self.channels[x][index] = self.get_val(val_result) / divisor
         # Calculate power factor
