@@ -1,0 +1,9 @@
+autoreconf.after
+autoreconf.before
+*.log
+*.substvars
+tmp
+check-power
+.debhelper
+debhelper-build-stamp
+files

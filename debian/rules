@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+build:
+	# This is possibly the worst hack ever invented
+	# We need pysmi, which is not in debian at the moment, but
+	# *only at compile time*. Hackaround debhelper by using a venv...
+	/usr/bin/python3 -m venv venv
+	export VIRTUAL_ENV=venv
+	export PATH=venv/bin:$PATH
+	pip install pysmi==0.3.0
+	venv/bin/python3 setup.py build
