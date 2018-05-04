@@ -2,7 +2,8 @@ Source: check-power
 Section: utils
 Priority: optional
 Maintainer: Maximilian Falkenstein <mfalkenstein@sos.ethz.ch>
-Build-Depends: debhelper (>=9), python3-pysnmp4, python3
+Build-Depends: debhelper (>=9), python3-pysnmp4, python3, python3-setuptools,
+  python3-venv
 Standards-Version: 3.9.8
 Vcs-Git: https://github.com/SOSETH/check_power.git
 Vcs-Browser: https://github.com/SOSETH/check_power

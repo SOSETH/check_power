@@ -9,6 +9,16 @@ build:
 	# *only at compile time*. Hackaround debhelper by using a venv...
 	/usr/bin/python3 -m venv --copies --clear venv
 	export VIRTUAL_ENV=$(shell pwd)/venv
+	export ORGPATH=$(PATH)
 	export PATH=$(shell pwd)/venv/bin:$(PATH)
 	venv/bin/pip3 install pysmi==0.3.0
 	venv/bin/python3 setup.py build
+	export PATH=$(ORGPATH)
+	export VIRTUAL_ENV=
+	python3 setup.py build
+
+override_dh_auto_install:
+	dh_auto_install $@
+	mkdir -p debian/check-power/usr/lib/nagios/plugins
+	mv debian/check-power/usr/bin/check_power debian/check-power/usr/lib/nagios/plugins/
+	rm -Rf debian/check-power/usr/bin
